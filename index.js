@@ -1,7 +1,6 @@
 const csv = require("csv-parser");
 const csvWriter = require("csv-write-stream");
 const fs = require("fs");
-
 const results = [];
 const args = process.argv.slice(2);
 const fileInput = args[0];
@@ -17,8 +16,35 @@ const writeStreamFile = (stream, fileName) => {
   });
 };
 
-(async () => {
+const processWriteFile = (writer) => {
   let row = 1;
+  const stream = fs
+    .createReadStream(__dirname + `/${fileInput}`)
+    .pipe(csv({ separator: "\t" }));
+  return new Promise((resolve, reject) => {
+    stream.on("data", (data) => {
+      if (data.id) {
+        data.mpn = data.id;
+        if (!data.price) return;
+
+        data.price = Number(data.price.match(/\d*.\d*/)[0]).toFixed(2);
+        if (data.sale_price) {
+          data.sale_price = Number(data.sale_price.match(/\d*.\d*/)[0]).toFixed(
+            2
+          );
+        }
+        data.brand = brand;
+        writer.write(data);
+        console.log(row);
+        row++;
+      }
+    });
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+};
+
+(async () => {
   const writer = csvWriter({ sendHeaders: false });
   writer.write({
     id: "id",
@@ -44,25 +70,7 @@ const writeStreamFile = (stream, fileName) => {
     sale_price: "sale_price",
     sale_price_effective_date: "sale_price_effective_date",
   });
-  fs.createReadStream(__dirname + `/${fileInput}`)
-    .pipe(csv({ separator: "\t" }))
-    .on("data", (data) => {
-      if (data.id) {
-        data.mpn = data.id;
-        if (!data.price) return;
-        data.price = Number(data.price.match(/\d*.\d*/)[0]).toFixed(2);
-        if (data.sale_price) {
-          data.sale_price = Number(data.sale_price.match(/\d*.\d*/)[0]).toFixed(
-            2
-          );
-        }
-        data.brand = brand;
-        console.log("Row number: ", row);
-        row++;
-        writer.write(data);
-      }
-    })
-    .on("end", () => {});
+  await processWriteFile(writer);
   await writeStreamFile(writer, __dirname + `/${fileOutput}`);
   writer.end();
 })();
